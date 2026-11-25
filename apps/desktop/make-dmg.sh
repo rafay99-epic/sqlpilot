@@ -1,12 +1,12 @@
 #!/bin/bash
 # Builds dist/SQLPilot.dmg holding SQLPilot.app, version 0.<commit count>.
 #
-# Signing: the Developer ID in the keychain (Syntax Labs) when present, else
-# ad-hoc. Notarizing (NOTARIZE=...):
+# Signing: always the Developer ID in the keychain (Syntax Labs); there are no
+# ad-hoc builds. Notarizing (NOTARIZE=...):
 #   xcode       the Apple account signed in to Xcode (default on a Mac, no passwords)
 #   notarytool  App Store Connect API key: APPLE_API_KEY_PATH, APPLE_API_KEY_ID,
 #               APPLE_API_ISSUER (default when APPLE_API_KEY_PATH is set; CI)
-#   none        skip (default in CI without the key, and for ad-hoc builds)
+#   none        skip, for quick local test builds only (CI releases always notarize)
 #
 #   apps/desktop/make-dmg.sh
 #   NOTARIZE=none apps/desktop/make-dmg.sh
@@ -22,20 +22,14 @@ ARCHIVE="$BUILD/App.xcarchive"
 DMG="$ROOT/dist/SQLPilot.dmg"
 VERSION="${SQLPILOT_VERSION:-0.$(git rev-list --count HEAD)}"
 
-if security find-identity -v -p codesigning | grep -q "Developer ID Application"; then
-  SIGNED=1
-  sign=()
-else
-  SIGNED=0
-  sign=(CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= OTHER_CODE_SIGN_FLAGS= ENABLE_HARDENED_RUNTIME=NO)
-fi
+security find-identity -v -p codesigning | grep -q "Developer ID Application" \
+  || { echo "No Developer ID Application certificate in the keychain. SQLPilot ships signed only."; exit 1; }
 if [ -n "${NOTARIZE:-}" ]; then :
 elif [ -n "${APPLE_API_KEY_PATH:-}" ]; then NOTARIZE=notarytool
-elif [ -n "${CI:-}" ]; then NOTARIZE=none
+elif [ -n "${CI:-}" ]; then echo "CI builds must notarize: APPLE_API_KEY_PATH is not set."; exit 1
 else NOTARIZE=xcode
 fi
-[ "$SIGNED" = 1 ] || NOTARIZE=none
-echo "SQLPilot $VERSION (signing: $([ "$SIGNED" = 1 ] && echo "Developer ID" || echo ad-hoc), notarize: $NOTARIZE)"
+echo "SQLPilot $VERSION (Developer ID, notarize: $NOTARIZE)"
 
 rm -rf "$BUILD" "$DMG"
 mkdir -p "$BUILD/stage" "$ROOT/dist"
@@ -45,7 +39,7 @@ xcodegen generate --quiet --spec project.yml
 echo "Archiving..."
 xcodebuild -quiet -project SQLPilot.xcodeproj -scheme SQLPilot -destination "generic/platform=macOS" \
   -configuration Release -archivePath "$ARCHIVE" \
-  MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$VERSION" ${sign[@]+"${sign[@]}"} archive
+  MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$VERSION" archive
 APP="$ARCHIVE/Products/Applications/$APP_NAME.app"
 
 case "$NOTARIZE" in

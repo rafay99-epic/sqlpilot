@@ -1,10 +1,10 @@
 name: CI
 
 # Tests and release in one pipeline, so the build students get is the exact one
-# that passed every check (same shape as Vitals). On pull requests: test the
-# scripts and the app, then build an unsigned DMG artifact to try. On main:
-# test, then build, sign, notarize and publish release v0.<commit count>, and
-# bump the Homebrew cask.
+# that passed every check (same shape as Vitals). Pull requests test the scripts
+# and the app. Main tests, then builds, signs, notarizes and publishes release
+# v0.<commit count>, and bumps the Homebrew cask. There are no ad-hoc builds: missing signing secrets
+# fail the release.
 on:
   push:
     branches: [main]
@@ -42,25 +42,6 @@ jobs:
       - name: Build and run unit tests
         run: apps/desktop/dev.sh test
 
-  # PR only: an installable DMG for reviewers. Ad-hoc signed, no secrets.
-  package:
-    name: Package DMG
-    if: github.event_name == 'pull_request'
-    needs: [scripts, app]
-    runs-on: macos-26
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: Install XcodeGen
-        run: brew install xcodegen
-      - name: Build DMG
-        run: NOTARIZE=none apps/desktop/make-dmg.sh
-      - uses: actions/upload-artifact@v7
-        with:
-          name: SQLPilot-dmg
-          path: dist/SQLPilot.dmg
-
   # main only, after both test jobs pass: nothing untested reaches students.
   release:
     name: Build and publish release
@@ -76,8 +57,7 @@ jobs:
       - name: Compute version
         run: echo "VERSION=0.$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
       # Developer ID certificate and App Store Connect API key from repo secrets.
-      # Missing secrets: the script warns and the build is ad-hoc (the cask
-      # still opens it; a direct DMG download shows the Gatekeeper warning).
+      # Any missing secret fails here, before anything is built or published.
       - name: Set up signing and notarization
         env:
           MACOS_DEVELOPER_ID_P12: ${{ secrets.MACOS_DEVELOPER_ID_P12 }}

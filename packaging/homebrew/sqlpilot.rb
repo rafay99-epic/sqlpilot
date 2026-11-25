@@ -18,13 +18,6 @@ cask "sqlpilot" do
 
   app "SQLPilot.app"
 
-  # Releases are notarized once the signing secrets are set. Until then CI
-  # builds are ad-hoc signed, so strip the download quarantine to let the
-  # first launch open. Harmless for notarized builds.
-  postflight do
-    system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{appdir}/SQLPilot.app"]
-  end
-
   zap trash: [
     "~/Library/Logs/SQLPilot",
     "~/Library/Preferences/com.syntaxlabtechnology.sqlpilot.plist",

@@ -7,12 +7,16 @@
 #   MACOS_DEVELOPER_ID_PASSWORD  its export password
 #   APPLE_API_KEY                contents of the AuthKey_XXXX.p8 file
 #   APPLE_API_KEY_ID, APPLE_API_ISSUER  from App Store Connect > Users and Access > Integrations
-# Missing certificate: warns and exits 0, so the build falls back to ad-hoc.
+# Any missing secret fails the release: SQLPilot ships signed and notarized only.
 set -euo pipefail
 
-if [ -z "${MACOS_DEVELOPER_ID_P12:-}" ]; then
-  echo "::warning::MACOS_DEVELOPER_ID_P12 not set, building an ad-hoc signed (not notarized) app."
-  exit 0
+missing=""
+for name in MACOS_DEVELOPER_ID_P12 MACOS_DEVELOPER_ID_PASSWORD APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER; do
+  [ -n "${!name:-}" ] || missing="$missing $name"
+done
+if [ -n "$missing" ]; then
+  echo "::error::Missing repo secrets:$missing. Releases must be signed and notarized."
+  exit 1
 fi
 
 keychain="$RUNNER_TEMP/signing.keychain-db"
@@ -30,10 +34,6 @@ existing=$(security list-keychains -d user | tr -d '"' | xargs)
 security list-keychains -d user -s "$keychain" $existing
 echo "Imported: $(security find-identity -v -p codesigning "$keychain" | grep -o '"Developer ID Application[^"]*"')"
 
-if [ -n "${APPLE_API_KEY:-}" ]; then
-  key="$RUNNER_TEMP/AuthKey.p8"
-  printf '%s\n' "$APPLE_API_KEY" >"$key"
-  echo "APPLE_API_KEY_PATH=$key" >>"$GITHUB_ENV"
-else
-  echo "::warning::APPLE_API_KEY not set, the app will be signed but not notarized."
-fi
+key="$RUNNER_TEMP/AuthKey.p8"
+printf '%s\n' "$APPLE_API_KEY" >"$key"
+echo "APPLE_API_KEY_PATH=$key" >>"$GITHUB_ENV"
