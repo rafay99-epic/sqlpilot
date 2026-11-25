@@ -21,7 +21,7 @@ With Homebrew:
 brew install --cask rafay99-epic/apps/sqlpilot
 ```
 
-Or download it from **[rafay99-epic.github.io/sqlpilot](https://rafay99-epic.github.io/sqlpilot/)** (the button always serves the [latest release](https://github.com/rafay99-epic/sqlpilot/releases/latest)), open the DMG and drag SQLPilot to Applications. Needs macOS 14 or later. Every build is signed with the Syntax Labs Developer ID and notarized by Apple.
+Or download it from **[sqlpilot.rafay99.com](https://sqlpilot.rafay99.com)** (the button always serves the [latest release](https://github.com/rafay99-epic/sqlpilot/releases/latest)), open the DMG and drag SQLPilot to Applications. Needs macOS 14 or later. Every build is signed with the Syntax Labs Developer ID and notarized by Apple.
 
 Open SQLPilot and press **Install**. Your Mac asks for its password once; setup takes about 10 minutes.
 
@@ -42,7 +42,7 @@ Every build is `0.<number of commits>`, like Vitals: the 42nd commit on `main` s
 ## Layout
 
 ```
-apps/website/      landing page (Vite, React, Tailwind), deployed to GitHub Pages
+apps/website/      landing page (Vite, React, Tailwind), deployed on Vercel
 apps/desktop/      SwiftUI app (XcodeGen project)
   Sources/SQLPilot/
     App/           entry point, menus, version, move-to-Applications
@@ -115,6 +115,6 @@ Repo secrets the release job needs. There are no ad-hoc builds: if a signing sec
 | `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` | the key's ID and issuer ID |
 | `TAP_TOKEN` | fine-grained token with Contents read/write on `homebrew-apps` (the shared tap token; without it the cask bump is skipped) |
 
-The website deploys from [`website.yml`](.github/workflows/website.yml) whenever `apps/website` changes on `main`.
+The website is the Vercel project `sqlpilot` (root directory `apps/website`). Vercel deploys every push to `main` and previews every PR.
 
 Made by Syntax Lab Technology. Developer: Abdul Rafay ([rafay99.com](https://rafay99.com)).
