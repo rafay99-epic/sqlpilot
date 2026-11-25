@@ -29,7 +29,8 @@ take_lock() {
     kill -0 "$(cat "$LOCK_DIR/pid" 2>/dev/null)" 2>/dev/null && die "Setup is already running in another window."
   fi
   echo $$ >"$LOCK_DIR/pid"
-  trap 'rm -rf "$LOCK_DIR"' EXIT
+  # Released by on_exit (lib/log.sh), which also logs the exit code.
+  LOCK_HELD=1
 }
 
 # Starts Docker Desktop (or colima) and waits for the engine. Sets ENGINE.
@@ -117,7 +118,7 @@ start_sql_server() {
   elif [ "$(docker container inspect -f '{{.HostConfig.Memory}} {{.HostConfig.NanoCpus}}' "$NAME")" != "$((MEM * 1048576)) $((CPUS * 1000000000))" ]; then
     # SQL Server reads its memory limit at startup, so a change needs a restart.
     docker update "${limits[@]}" "$NAME" >/dev/null
-    docker restart "$NAME" >/dev/null
+    docker restart -t 60 "$NAME" >/dev/null
     ok "Applied new limits and restarted"
   elif [ "$state" = running ]; then
     ok "Already running"

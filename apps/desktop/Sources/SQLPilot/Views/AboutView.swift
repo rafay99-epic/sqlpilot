@@ -4,19 +4,12 @@ import SwiftUI
 struct AboutView: View {
   private static let developerURL = URL(string: "https://rafay99.com")!
 
-  private var version: String {
-    let info = Bundle.main.infoDictionary
-    let short = info?["CFBundleShortVersionString"] as? String ?? "?"
-    let build = info?["CFBundleVersion"] as? String ?? "?"
-    return "Version \(short) (\(build))"
-  }
-
   var body: some View {
     VStack(spacing: 14) {
       AppIcon(size: 88)
       VStack(spacing: 3) {
         Text("SQLPilot").font(.title2.weight(.semibold))
-        Text(version).font(.callout).foregroundStyle(.secondary).monospacedDigit()
+        Text("Version \(AppVersion.display)").font(.callout).foregroundStyle(.secondary).monospacedDigit()
         Text("A local SQL Server for class, on any Mac.").font(.caption).foregroundStyle(.secondary)
       }
       Divider()

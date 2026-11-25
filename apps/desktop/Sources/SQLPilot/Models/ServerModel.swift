@@ -10,7 +10,6 @@ final class ServerModel {
   private(set) var report = StatusReport()
   private(set) var checkedAt: Date?
 
-  private var log: [String] = []
   private var refreshing = false
   private let script = SetupScript.bundled
   private let passwordFile = FileManager.default.homeDirectoryForCurrentUser
@@ -52,6 +51,8 @@ final class ServerModel {
   }
 
   private func applyState() {
+    let before = phase
+    defer { if phase != before { Log.info("State: \(phase.title)\(report.reason.map { " (\($0))" } ?? "")") } }
     switch report.state {
     case .notInstalled: phase = .notInstalled
     case .broken: phase = .broken(report.reason ?? "Something isn't set up.")
@@ -68,6 +69,7 @@ final class ServerModel {
   /// setup.sh is safe to re-run and fixes whatever is missing.
   func setup() async {
     guard !phase.isBusy || phase == .checking else { return }
+    Log.info("Setup or repair started")
     var progress = SetupProgress()
     phase = .installing(progress)
     var failure: String?
@@ -82,9 +84,11 @@ final class ServerModel {
       self.phase = .installing(progress)
     }
     if status == 0 {
+      Log.info("Setup finished")
       await refresh()
       if phase == .on { SQLEditor.open(port: report.port) }
     } else {
+      Log.error("Setup failed: \(failure ?? "exit \(status)")")
       phase = .broken(failure ?? "Setup stopped before it finished.")
       await refresh(keepPhase: true)
     }
@@ -92,6 +96,7 @@ final class ServerModel {
 
   func start() async {
     guard canToggle else { return }
+    Log.info("Start pressed")
     phase = .starting
     var failure: String?
     let status = await run(.start) { raw in
@@ -100,6 +105,7 @@ final class ServerModel {
     if status == 0 {
       await refresh()
     } else {
+      Log.error("Start failed: \(failure ?? "exit \(status)")")
       phase = .broken(failure ?? "The database didn't start.")
       await refresh(keepPhase: true)
     }
@@ -107,6 +113,7 @@ final class ServerModel {
 
   func stop() async {
     guard canToggle else { return }
+    Log.info("Stop pressed")
     phase = .stopping
     _ = await run(.stop) { _ in }
     await refresh()
@@ -125,8 +132,7 @@ final class ServerModel {
   }
 
   func copyProblemReport() {
-    let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-    Clipboard.copy(ProblemReport.make(version: version, phase: phase, checks: report.checks, log: log, secret: password))
+    Clipboard.copy(ProblemReport.make(version: AppVersion.display, phase: phase, checks: report.checks, log: Log.tail(80), secret: password))
   }
 
   private var password: String {
@@ -136,10 +142,8 @@ final class ServerModel {
   // MARK: Script
 
   private func run(_ command: SetupScript.Command, onLine: (String) -> Void) async -> Int32 {
-    await script.run(command) { line in
-      log.append(line)
-      if log.count > 400 { log.removeFirst(log.count - 400) }
-      onLine(line)
-    }
+    let status = await script.run(command, onLine: onLine)
+    if status != 0 { Log.error("setup.sh \(command.rawValue) exited with \(status)") }
+    return status
   }
 }

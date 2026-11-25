@@ -7,7 +7,8 @@ cd "$(dirname "$0")"
 
 [ -f build/AppIcon.icns ] || ../../assets/make-icon.sh install build/AppIcon.icns
 xcodegen generate --quiet --spec project.yml
-sign=(CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= OTHER_CODE_SIGN_FLAGS=)
+VERSION="0.$(git rev-list --count HEAD 2>/dev/null || echo 0)"
+sign=(CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= OTHER_CODE_SIGN_FLAGS= MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$VERSION")
 
 if [ "${1:-run}" = test ]; then
   xcodebuild -quiet -project SQLPilot.xcodeproj -scheme SQLPilot -destination 'platform=macOS' \

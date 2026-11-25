@@ -28,8 +28,9 @@ targets:
     settings:
       PRODUCT_NAME: SQLPilot
       PRODUCT_BUNDLE_IDENTIFIER: com.syntaxlabtechnology.sqlpilot
-      MARKETING_VERSION: "2.0"
-      CURRENT_PROJECT_VERSION: "6"
+      # Real values come from dev.sh / make-dmg.sh: 0.<commit count>, like Vitals.
+      MARKETING_VERSION: "0.0"
+      CURRENT_PROJECT_VERSION: "0.0"
       SWIFT_VERSION: "5.0"
       DEVELOPMENT_TEAM: MGH5K382YN
       CODE_SIGN_STYLE: Manual

@@ -9,12 +9,14 @@ STEP_NO=0
 STEP_TOTAL=6
 step() {
   STEP_NO=$((STEP_NO + 1))
+  log_line "== $*"
   if [ -n "$UI" ]; then printf 'progress|%s|%s|%s\n' "$STEP_NO" "$STEP_TOTAL" "$*"; else printf '\n\033[1m==> %s\033[0m\n' "$*"; fi
 }
-ok()   { if [ -n "$UI" ]; then printf 'detail|%s\n' "$*"; else printf '    \033[32m%s\033[0m\n' "$*"; fi; }
-warn() { if [ -n "$UI" ]; then printf 'detail|%s\n' "$*"; else printf '    \033[33m%s\033[0m\n' "$*"; fi; }
-say()  { if [ -n "$UI" ]; then printf 'detail|%s\n' "$*"; else printf '    %s\n' "$*"; fi; }
+ok()   { log_line "$*"; if [ -n "$UI" ]; then printf 'detail|%s\n' "$*"; else printf '    \033[32m%s\033[0m\n' "$*"; fi; }
+warn() { log_line "WARN: $*"; if [ -n "$UI" ]; then printf 'detail|%s\n' "$*"; else printf '    \033[33m%s\033[0m\n' "$*"; fi; }
+say()  { log_line "$*"; if [ -n "$UI" ]; then printf 'detail|%s\n' "$*"; else printf '    %s\n' "$*"; fi; }
 die() {
+  log_line "ERROR: $*"
   if [ -n "$UI" ]; then printf 'error|%s\n' "$(printf '%s' "$*" | tr '\n' ' ')"
   else printf '\n\033[31mError: %s\033[0m\n' "$*"; pause_if_interactive; fi
   exit 1

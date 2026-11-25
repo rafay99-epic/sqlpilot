@@ -14,6 +14,8 @@
 # Overrides: MSSQL_SA_PASSWORD, MSSQL_PORT, MSSQL_CONTAINER, MSSQL_IMAGE,
 #            MSSQL_MEMORY_MB, MSSQL_CPUS (integer), SQLSETUP_SKIP_APPS=1,
 #            SQLSETUP_UI=1 (app output mode, see lib/ui.sh)
+#
+# Logs: ~/Library/Logs/SQLPilot/YYYY-MM-DD.log (shared with the app, kept 14 days)
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -63,10 +65,10 @@ run_setup() {
 # Sourcing (tests) loads the functions without running anything.
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   case "${1:-setup}" in
-    setup)  run_setup ;;
-    status) status_report ;;
-    start)  server_start ;;
-    stop)   server_stop ;;
+    setup)  log_begin setup; run_setup ;;
+    status) LOG_TAG=status; status_report ;;
+    start)  log_begin start; server_start ;;
+    stop)   log_begin stop; server_stop ;;
     *) echo "usage: setup.sh [setup|status|start|stop]" >&2; exit 2 ;;
   esac
 fi

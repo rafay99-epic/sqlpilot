@@ -7,6 +7,14 @@ struct SQLPilotApp: App {
   // SwiftUI creates the App once, so the model lives for the process.
   @State private var model = ServerModel()
 
+  init() {
+    // Unit tests host the app; keep their launches out of the student's log.
+    guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+    CrashReporter.install()
+    Log.pruneOld()
+    Log.info("SQLPilot \(AppVersion.display) launched on macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
+  }
+
   var body: some Scene {
     // Window, not WindowGroup: one main window, no ⌘N duplicates.
     Window("SQLPilot", id: "main") {
@@ -40,6 +48,11 @@ struct SQLPilotApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
     MoveToApplications.offerIfNeeded()
+  }
+
+  func applicationWillTerminate(_ notification: Notification) {
+    Log.info("SQLPilot quit")
+    CrashReporter.markCleanExit()
   }
 
   /// Closing the window leaves the menu bar item running.

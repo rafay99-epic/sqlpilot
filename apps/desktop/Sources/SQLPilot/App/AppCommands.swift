@@ -36,6 +36,9 @@ struct AppCommands: Commands {
 
     CommandGroup(replacing: .help) {
       Button("Copy Problem Report") { model.copyProblemReport() }
+      Button("Show Today's Log") { NSWorkspace.shared.open(Log.file(for: .now)) }
+      Button("Open Logs Folder") { NSWorkspace.shared.open(Log.folder) }
+      Divider()
       Link("Developer Website", destination: Self.developerURL)
     }
   }

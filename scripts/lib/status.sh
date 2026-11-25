@@ -74,6 +74,7 @@ status_report() {
   elif [ "$container" = running ]; then state=starting
   else state=off
   fi
+  log_line "$state${issues[0]:+: ${issues[0]}}"
   echo "state|$state"
   if ((${#issues[@]})); then echo "reason|${issues[0]}"; fi
   if ((${#minor[@]})); then echo "minor|${minor[0]}"; fi
