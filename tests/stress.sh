@@ -126,7 +126,7 @@ rc=$?; check "memory below SQL Server's floor is rejected" eval "[ $rc != 0 ] &&
 check "server only reachable from this Mac (127.0.0.1)" eval '[ "$(docker port "$NAME" 1433/tcp)" = "127.0.0.1:$PORT" ]'
 
 echo "App commands: status / start / stop"
-app() { env HOME="$SANDBOX/home" MSSQL_CONTAINER="$NAME" MSSQL_PORT="$PORT" SQLSETUP_UI=1 SQLSETUP_KEEP_DOCKER=1 /bin/bash "$SETUP" "$@" </dev/null 2>&1; }
+app() { env HOME="$SANDBOX/home" MSSQL_CONTAINER="$NAME" MSSQL_PORT="$PORT" SQLSETUP_UI=1 /bin/bash "$SETUP" "$@" </dev/null 2>&1; }
 state_of() { app status | sed -n 's/^state|//p'; }
 check "status says on when the database is running" [ "$(state_of)" = on ]
 check "status lists every part" eval '[ "$(app status | grep -c "^check|")" -ge 9 ]'

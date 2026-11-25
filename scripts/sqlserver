@@ -1,0 +1,58 @@
+#!/bin/bash
+# sqlserver: everyday commands for the local SQL Server container.
+# setup.sh installs this to ~/.sqlserver-mac/bin, replacing __NAME__ with the
+# container name.
+set -euo pipefail
+NAME=__NAME__
+DIR="$HOME/.sqlserver-mac"
+export PATH="/usr/local/bin:/opt/homebrew/bin:/Applications/Docker.app/Contents/Resources/bin:$PATH"
+die() { echo "sqlserver: $*" >&2; exit 1; }
+pw() { cat "$DIR/sa_password"; }
+sqlcmd() { docker exec -i -e SQLCMDPASSWORD="$(pw)" "$NAME" /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa "$@"; }
+quote() { local q="'"; printf "%s" "${1//$q/$q$q}"; } # escape for a T-SQL N'...' literal (bash 3.2 safe)
+
+case "${1:-help}" in
+  start)    docker start "$NAME" >/dev/null && echo "Started." ;;
+  stop)     docker stop "$NAME" >/dev/null && echo "Stopped. RAM is free again." ;;
+  status)   docker ps -a --filter "name=^/$NAME$" --format '{{.Names}}: {{.Status}}' ;;
+  info)     cat "$DIR/connection.txt" ;;
+  password) pw | pbcopy; echo "Password copied to the clipboard." ;;
+  shell)    docker exec -it -e SQLCMDPASSWORD="$(pw)" "$NAME" /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa ;;
+  run)      # run <file.sql> [database]
+    [ -f "${2:-}" ] || die "usage: sqlserver run <file.sql> [database]"
+    sqlcmd -b -d "${3:-master}" <"$2" ;;
+  restore)  # restore <file.bak> [database name]
+    [ -f "${2:-}" ] || die "usage: sqlserver restore <file.bak> [database name]"
+    bak=$(basename "$2"); db=${3:-${bak%.*}}
+    docker exec "$NAME" mkdir -p /var/opt/mssql/backup
+    # Streamed in (not docker cp) so the file belongs to SQL Server's own user.
+    docker exec -i "$NAME" sh -c 'cat >"$1"' _ "/var/opt/mssql/backup/$bak" <"$2"
+    # Backups made on Windows point at C:\ paths, so every file is moved
+    # into the container's data folder.
+    sqlcmd -b -Q "
+      SET NOCOUNT ON;
+      DECLARE @db sysname = N'$(quote "$db")', @path nvarchar(260) = N'/var/opt/mssql/backup/$(quote "$bak")';
+      DECLARE @files TABLE (LogicalName nvarchar(128), PhysicalName nvarchar(260), Type char(1), FileGroupName nvarchar(128), Size numeric(20,0), MaxSize numeric(20,0), FileId bigint, CreateLSN numeric(25,0), DropLSN numeric(25,0), UniqueId uniqueidentifier, ReadOnlyLSN numeric(25,0), ReadWriteLSN numeric(25,0), BackupSizeInBytes bigint, SourceBlockSize int, FileGroupId int, LogGroupGUID uniqueidentifier, DifferentialBaseLSN numeric(25,0), DifferentialBaseGUID uniqueidentifier, IsReadOnly bit, IsPresent bit, TDEThumbprint varbinary(32), SnapshotUrl nvarchar(360));
+      DECLARE @esc nvarchar(520) = REPLACE(@path, '''', ''''''); -- EXEC() accepts only variables and literals
+      INSERT @files EXEC (N'RESTORE FILELISTONLY FROM DISK = N''' + @esc + N'''');
+      DECLARE @sql nvarchar(max) = N'RESTORE DATABASE ' + QUOTENAME(@db) + N' FROM DISK = N''' + @esc + N''' WITH REPLACE, STATS = 25';
+      SELECT @sql += N', MOVE N''' + REPLACE(LogicalName, '''', '''''') + N''' TO N''/var/opt/mssql/data/'
+        + REPLACE(@db + N'_' + LogicalName, '''', '''''')
+        + CASE Type WHEN 'L' THEN N'.ldf' WHEN 'D' THEN N'.mdf' ELSE N'' END + N'''' FROM @files;
+      EXEC (@sql);"
+    docker exec "$NAME" rm -f "/var/opt/mssql/backup/$bak"
+    echo "Restored $bak as database [$db]." ;;
+  ui)       # Opens VS Code connected, on the SSMS-style Object Explorer.
+    port=$(docker port "$NAME" 1433/tcp | head -1 | awk -F: '{print $NF}')
+    open "vscode://ms-mssql.mssql/connect?server=localhost%2C$port&database=master&user=sa&authenticationType=SqlLogin" ;;
+  *) cat <<'USAGE'
+sqlserver start | stop | status     control the server (stop frees its RAM)
+sqlserver info                      server, login and connection string
+sqlserver password                  copy the sa password
+sqlserver ui                        open VS Code connected, Object Explorer like SSMS
+sqlserver shell                     interactive sqlcmd prompt
+sqlserver run <file.sql> [db]       run a script, e.g. one your professor shares
+sqlserver restore <file.bak> [name] restore a backup (works with Windows .bak files)
+USAGE
+  ;;
+esac
