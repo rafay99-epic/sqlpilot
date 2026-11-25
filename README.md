@@ -21,7 +21,7 @@ With Homebrew:
 brew install --cask rafay99-epic/apps/sqlpilot
 ```
 
-Or download `SQLPilot.dmg` from the [latest release](https://github.com/rafay99-epic/sqlpilot/releases/latest), open it and drag SQLPilot to Applications. Needs macOS 14 or later.
+Or download it from **[rafay99-epic.github.io/sqlpilot](https://rafay99-epic.github.io/sqlpilot/)** (the button always serves the [latest release](https://github.com/rafay99-epic/sqlpilot/releases/latest)), open the DMG and drag SQLPilot to Applications. Needs macOS 14 or later. Every build is signed with the Syntax Labs Developer ID and notarized by Apple.
 
 Open SQLPilot and press **Install**. Your Mac asks for its password once; setup takes about 10 minutes.
 
@@ -42,6 +42,7 @@ Every build is `0.<number of commits>`, like Vitals: the 42nd commit on `main` s
 ## Layout
 
 ```
+apps/website/      landing page (Vite, React, Tailwind), deployed to GitHub Pages
 apps/desktop/      SwiftUI app (XcodeGen project)
   Sources/SQLPilot/
     App/           entry point, menus, version, move-to-Applications
@@ -104,7 +105,7 @@ Needs Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
 `main` is protected: changes land through pull requests once the **Scripts** and **App** checks pass. Each merge to `main` runs [CI](.github/workflows/ci.yml), which tests, builds, signs, notarizes, publishes release `v0.<commits>` with `SQLPilot.dmg`, and bumps the cask in [rafay99-epic/homebrew-apps](https://github.com/rafay99-epic/homebrew-apps).
 
-Repo secrets the release job uses (each is optional; without it that step is skipped with a warning):
+Repo secrets the release job needs. There are no ad-hoc builds: if a signing secret is missing the release fails before anything is published.
 
 | Secret | What |
 |---|---|
@@ -112,8 +113,8 @@ Repo secrets the release job uses (each is optional; without it that step is ski
 | `MACOS_DEVELOPER_ID_PASSWORD` | its export password |
 | `APPLE_API_KEY` | contents of the App Store Connect API key (`AuthKey_XXXX.p8`) |
 | `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` | the key's ID and issuer ID |
-| `TAP_TOKEN` | fine-grained token with Contents read/write on `homebrew-apps` |
+| `TAP_TOKEN` | fine-grained token with Contents read/write on `homebrew-apps` (the shared tap token; without it the cask bump is skipped) |
 
-Without the signing secrets the release is ad-hoc signed: the Homebrew cask still opens it, but a downloaded DMG shows the Gatekeeper warning.
+The website deploys from [`website.yml`](.github/workflows/website.yml) whenever `apps/website` changes on `main`.
 
 Made by Syntax Lab Technology. Developer: Abdul Rafay ([rafay99.com](https://rafay99.com)).
