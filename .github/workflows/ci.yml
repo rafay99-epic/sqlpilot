@@ -1,0 +1,112 @@
+name: CI
+
+# Tests and release in one pipeline, so the build students get is the exact one
+# that passed every check (same shape as Vitals). On pull requests: test the
+# scripts and the app, then build an unsigned DMG artifact to try. On main:
+# test, then build, sign, notarize and publish release v0.<commit count>, and
+# bump the Homebrew cask.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# PRs cancel superseded runs; main never cancels, so two releases can't race.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  scripts:
+    name: Scripts
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - name: Syntax under macOS bash 3.2
+        run: for f in scripts/setup.sh scripts/lib/*.sh scripts/sqlserver tests/*.sh assets/*.sh apps/desktop/*.sh .github/scripts/*.sh; do /bin/bash -n "$f"; done
+      - name: ShellCheck
+        run: |
+          brew install shellcheck
+          shellcheck --severity=error scripts/setup.sh scripts/lib/*.sh scripts/sqlserver tests/*.sh .github/scripts/*.sh
+      - name: Unit tests (no Docker on hosted runners)
+        run: tests/unit.sh
+
+  app:
+    name: App
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the version is the commit count
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build and run unit tests
+        run: apps/desktop/dev.sh test
+
+  # PR only: an installable DMG for reviewers. Ad-hoc signed, no secrets.
+  package:
+    name: Package DMG
+    if: github.event_name == 'pull_request'
+    needs: [scripts, app]
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build DMG
+        run: NOTARIZE=none apps/desktop/make-dmg.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: SQLPilot-dmg
+          path: dist/SQLPilot.dmg
+
+  # main only, after both test jobs pass: nothing untested reaches students.
+  release:
+    name: Build and publish release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [scripts, app]
+    runs-on: macos-26
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Compute version
+        run: echo "VERSION=0.$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
+      # Developer ID certificate and App Store Connect API key from repo secrets.
+      # Missing secrets: the script warns and the build is ad-hoc (the cask
+      # still opens it; a direct DMG download shows the Gatekeeper warning).
+      - name: Set up signing and notarization
+        env:
+          MACOS_DEVELOPER_ID_P12: ${{ secrets.MACOS_DEVELOPER_ID_P12 }}
+          MACOS_DEVELOPER_ID_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: bash .github/scripts/setup-signing.sh
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build, sign and notarize
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: SQLPILOT_VERSION="$VERSION" apps/desktop/make-dmg.sh
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" dist/SQLPilot.dmg \
+            --title "SQLPilot $VERSION" --generate-notes
+      # Needs TAP_TOKEN: a fine-grained PAT with Contents: Read & Write on
+      # rafay99-epic/homebrew-apps. Skips with a warning if it's missing.
+      - name: Bump Homebrew cask
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: |
+          if [ -z "${TAP_TOKEN:-}" ]; then
+            echo "::warning::TAP_TOKEN not set, skipping the Homebrew cask bump."
+            exit 0
+          fi
+          bash .github/scripts/bump-cask.sh "$PWD/dist/SQLPilot.dmg"
