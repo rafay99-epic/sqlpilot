@@ -2,16 +2,36 @@
 
 # SQL Server Setup for Mac
 
-A one-click installer that gives a Mac (Apple Silicon or Intel) a local SQL Server for .NET coursework, plus an SSMS-style interface.
+A small Mac app (Apple Silicon or Intel) that gives students a local SQL Server for .NET coursework, plus an SSMS-style editor.
 
-Open `dist/SQLServerSetup.dmg`, double-click **SQL Server Setup**, and it:
+Open `dist/SQLServerSetup.dmg` and drag **SQL Server Setup** to Applications (or just open it; it offers to move itself). The app:
 
-- installs whatever is missing (Rosetta, Docker Desktop, .NET SDK, VS Code) behind one password prompt
-- starts SQL Server 2022 Developer Edition in Docker, sized to the Mac's RAM and CPUs
-- sets up VS Code's SQL Server extension with a saved connection, then opens it on the Object Explorer (Databases, Security, Server Objects), like SSMS
-- installs `dotnet-ef` and a `sqlserver` helper command
+- installs whatever is missing (Rosetta, Docker Desktop, .NET SDK, VS Code) behind one password prompt, with no Terminal
+- runs SQL Server 2022 Developer Edition in Docker, sized to the Mac's RAM and CPUs
+- has a switch to start and stop the server, a health check of every part, and one Repair button
+- opens VS Code's SQL Server extension connected, on its Object Explorer (like SSMS)
+- lives in the menu bar too, with Start, Stop and Open SQL Editor
 
-The app is signed with the Syntax Labs Developer ID and notarized, so Gatekeeper opens it without warnings.
+Signed with the Syntax Labs Developer ID and notarized, so Gatekeeper opens it without warnings.
+
+## Layout
+
+```
+apps/desktop/      SwiftUI app (XcodeGen project)
+  Sources/SQLServerSetup/
+    App/           entry point, menus, move-to-Applications
+    Models/        ServerModel (state + actions), phases, health checks
+    Services/      runs setup.sh, parses its output, problem report, VS Code link
+    Views/         screens and small components
+  Tests/           unit tests (status parsing, report masking)
+  dev.sh           debug build / unit tests
+  make-dmg.sh      signed, notarized DMG into dist/
+scripts/setup.sh   the engine: install, repair, status, start, stop
+tests/stress.sh    sandboxed tests for setup.sh, including a load test
+assets/            icon drawing code and previews
+```
+
+The app holds no install logic. It runs the bundled `scripts/setup.sh` with `SQLSETUP_UI=1`, which prints `kind|...` lines (`progress`, `detail`, `error`, `check`, `state`) that the app renders.
 
 ## Sizing
 
@@ -24,29 +44,26 @@ The app is signed with the Syntax Labs Developer ID and notarized, so Gatekeeper
 
 Override with `MSSQL_MEMORY_MB` and `MSSQL_CPUS`. The server listens on `127.0.0.1` only.
 
-## Everyday use
+## Terminal use
+
+`scripts/setup.sh` also works on its own (`setup`, `status`, `start`, `stop`), and setup installs a `sqlserver` helper:
 
 ```
 sqlserver ui                         open VS Code connected, Object Explorer like SSMS
-sqlserver info                       server, login and connection string
 sqlserver restore ~/Downloads/X.bak  restore a backup (Windows .bak files work)
 sqlserver run script.sql             run a script
-sqlserver stop | start | status      stop frees its RAM
+sqlserver info | stop | start        details, or control the server
 ```
-
-Login details live in `~/.sqlserver-mac/connection.txt`.
 
 ## Development
 
 ```
-./setup.sh              run setup directly
-./tests/stress.sh       sandboxed tests: install scenarios, helper, VS Code merge, load at the 8 GB tier
-./build-dmg.sh          build, sign and notarize (uses the Apple account signed in to Xcode)
-NOTARIZE=0 ./build-dmg.sh   sign only
+apps/desktop/dev.sh           build and open a debug build
+apps/desktop/dev.sh test      unit tests
+tests/stress.sh               setup.sh tests in a sandbox (container sqlstress, port 14339)
+apps/desktop/make-dmg.sh      build, sign and notarize (uses the Apple account signed in to Xcode)
 ```
 
-Needs Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen) to build. The stress test uses its own container (`sqlstress`, port 14339) and never touches the real one.
+Needs Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
-- `setup.sh`: everything the installer does
-- `app/`: the small Swift launcher that opens `setup.sh` in Terminal
-- `assets/icon.swift`: draws the icon (`ICON=install|stack|ember`)
+Made by Syntax Lab Technology. Developer: Abdul Rafay ([rafay99.com](https://rafay99.com)).

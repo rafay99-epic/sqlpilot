@@ -33,12 +33,32 @@ MIN_FREE_GB=8
 # Apps launched from Finder get a bare PATH.
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/local/share/dotnet:/Applications/Docker.app/Contents/Resources/bin:$HOME/.dotnet/tools:$CONFIG_DIR/bin:$PATH"
 
-step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
-ok()   { printf '    \033[32m%s\033[0m\n' "$*"; }
-warn() { printf '    \033[33m%s\033[0m\n' "$*"; }
-die()  { printf '\n\033[31mError: %s\033[0m\n' "$*"; pause_if_interactive; exit 1; }
+# SQLSETUP_UI=1 (set by the app) turns output into "kind|text" lines it parses:
+# progress|n|total|label, detail|text, error|text.
+UI=${SQLSETUP_UI:-}
+STEP_NO=0
+STEP_TOTAL=6
+step() {
+  STEP_NO=$((STEP_NO + 1))
+  if [ -n "$UI" ]; then printf 'progress|%s|%s|%s\n' "$STEP_NO" "$STEP_TOTAL" "$*"; else printf '\n\033[1m==> %s\033[0m\n' "$*"; fi
+}
+ok()   { if [ -n "$UI" ]; then printf 'detail|%s\n' "$*"; else printf '    \033[32m%s\033[0m\n' "$*"; fi; }
+warn() { if [ -n "$UI" ]; then printf 'detail|%s\n' "$*"; else printf '    \033[33m%s\033[0m\n' "$*"; fi; }
+say()  { if [ -n "$UI" ]; then printf 'detail|%s\n' "$*"; else printf '    %s\n' "$*"; fi; }
+die() {
+  if [ -n "$UI" ]; then printf 'error|%s\n' "$(printf '%s' "$*" | tr '\n' ' ')"
+  else printf '\n\033[31mError: %s\033[0m\n' "$*"; pause_if_interactive; fi
+  exit 1
+}
 pause_if_interactive() { if [ -t 0 ]; then read -r -p $'\nPress Return to close. ' _ || true; fi; }
-confirm() { [ -t 0 ] || return 1; local a; read -r -p "    $1 [Y/n] " a; [[ ! "$a" =~ ^[Nn] ]]; }
+confirm() {
+  if [ -n "$UI" ]; then
+    osascript -e "button returned of (display dialog \"$1\" buttons {\"Not now\", \"OK\"} default button \"OK\" with title \"SQL Server\")" 2>/dev/null | grep -q OK
+    return
+  fi
+  [ -t 0 ] || return 1
+  local a; read -r -p "    $1 [Y/n] " a; [[ ! "$a" =~ ^[Nn] ]]
+}
 
 # Picks limits for a host with $1 GB RAM and $2 CPUs.
 # Prints "<container MB> <container CPUs> <Docker VM MB>".
@@ -77,8 +97,8 @@ vscode_app() {
 }
 
 download() { # download <url> <file> <label>
-  echo "    Downloading $3..."
-  curl -fL --retry 3 --progress-bar -o "$2" "$1" || die "Downloading $3 failed. Check your internet connection and run this again."
+  say "Downloading $3..."
+  curl -fL --retry 3 $([ -n "$UI" ] && echo -sS || echo --progress-bar) -o "$2" "$1" || die "Downloading $3 failed. Check your internet connection and run this again."
 }
 
 # Runs shell commands as root behind one macOS password dialog.
@@ -132,7 +152,7 @@ install_missing() { # <arch>
 
   local list
   list=$(printf '%s, ' "${names[@]}")
-  echo "    Installing: ${list%, }"
+  say "Installing: ${list%, }"
   tmp=$(mktemp -d)
   local rid=x64 docker_arch=amd64
   if [ "$arch" = arm64 ]; then rid=arm64; docker_arch=arm64; fi
@@ -155,7 +175,7 @@ install_missing() { # <arch>
   fi
 
   if ((${#admin[@]})); then
-    echo "    macOS will ask for your password once."
+    say "macOS will ask for your password once."
     local joined
     joined=$(printf '%s && ' "${admin[@]}")
     if ! run_as_admin "${joined% && }"; then
@@ -319,7 +339,7 @@ main() {
     # Size the VM before its first boot instead of Docker's default (half of RAM).
     if ((NEW_DOCKER)); then write_docker_settings "$vm" "$cpus"; fi
     open -ga Docker
-    echo "    Waiting for Docker Desktop (the first start takes a minute or two)..."
+    say "Waiting for Docker Desktop (the first start takes a minute or two)..."
     wait_for 600 docker_up || die "Docker Desktop did not start. Open it from Applications, then run this again."
     ok "Docker is running"
   elif command -v colima >/dev/null; then
@@ -377,7 +397,7 @@ Re-run with MSSQL_SA_PASSWORD='...' or remove it: docker rm -f $NAME && docker v
       if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
         die "Port $PORT is already in use. Re-run with MSSQL_PORT=14330 (or any free port)."
       fi
-      echo "    Downloading SQL Server (about 1.5 GB the first time)..."
+      say "Downloading SQL Server (about 1.5 GB the first time)..."
       docker pull --platform linux/amd64 "$IMAGE" >/dev/null || die "SQL Server download failed. Check your internet connection."
       # Bound to 127.0.0.1: reachable from this Mac only, not the Wi-Fi.
       docker run -d --name "$NAME" --platform linux/amd64 \
@@ -406,7 +426,7 @@ Re-run with MSSQL_SA_PASSWORD='...' or remove it: docker rm -f $NAME && docker v
   # The port of an existing container wins over MSSQL_PORT.
   PORT=$(docker port "$NAME" 1433/tcp | head -1 | awk -F: '{print $NF}')
 
-  echo "    Waiting for SQL Server to accept logins..."
+  say "Waiting for SQL Server to accept logins..."
   local ready=0
   for ((i = 0; i < 90; i++)); do
     if [ "$(docker inspect -f '{{.State.Running}}' "$NAME")" != true ]; then
@@ -466,9 +486,11 @@ Server icon in VS Code's sidebar > "Local SQL Server".
 Helper (new Terminal windows): sqlserver help
 EOF
   chmod 600 "$CONFIG_DIR/connection.txt"
-  printf '%s' "$PASSWORD" | pbcopy
 
   step "Done. SQL Server is ready."
+  # The app shows its own screen; the summary below is for Terminal runs.
+  [ -z "$UI" ] || return 0
+  printf '%s' "$PASSWORD" | pbcopy
   cat <<EOF
 
     Server:    localhost,$PORT
@@ -501,5 +523,123 @@ EOF
   if [ -t 0 ]; then read -r -t 60 -p $'\nThis window closes in 60 seconds. Press Return to close it now. ' _ || true; fi
 }
 
-# Sourcing (tests) loads the functions without running setup.
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi
+# Prints one "check|id|ok/bad/off/info|label|detail" line per part, then
+# "state|notinstalled/broken/off/starting/on", plus "reason|..." when broken,
+# "minor|..." for problems that don't stop the server, and "port|...".
+# Read-only: never installs or changes anything.
+status_report() {
+  local issues=() minor=() state docker_ok=0 container=unknown
+  emit_check() { printf 'check|%s|%s|%s|%s\n' "$@"; }
+
+  if [ "$(uname -m)" = arm64 ]; then
+    if [ -e /Library/Apple/usr/libexec/oah/libRosettaRuntime ]; then emit_check rosetta ok "Rosetta 2" "installed"
+    else emit_check rosetta bad "Rosetta 2" "missing"; issues+=("Rosetta isn't installed."); fi
+  fi
+
+  if docker_up; then
+    docker_ok=1
+    emit_check docker ok "Docker" "running"
+  elif [ -d "$DOCKER_APP" ] || command -v colima >/dev/null; then
+    emit_check docker off "Docker" "not running"
+  else
+    emit_check docker bad "Docker" "not installed"; issues+=("Docker isn't installed.")
+  fi
+
+  if ((docker_ok)); then
+    container=$(docker container inspect -f '{{.State.Status}}' "$NAME" 2>/dev/null) || container=missing
+  fi
+  case "$container" in
+    running)
+      PASSWORD=$(cat "$PW_FILE" 2>/dev/null || true)
+      local version
+      if [ -n "$PASSWORD" ] && version=$(sql "SELECT CAST(SERVERPROPERTY('ProductVersion') AS varchar)" 2>/dev/null | head -1); then
+        emit_check server ok "SQL Server" "$version"
+        container=ready
+      else
+        emit_check server off "SQL Server" "starting"
+      fi ;;
+    missing)
+      emit_check server bad "SQL Server" "not set up"
+      if [ -f "$PW_FILE" ]; then issues+=("The database was removed."); fi ;;
+    unknown) emit_check server off "SQL Server" "off" ;;
+    *) emit_check server off "SQL Server" "off" ;;
+  esac
+  if ((docker_ok)) && [ "$container" != missing ]; then
+    local limits
+    limits=$(docker container inspect -f '{{.HostConfig.Memory}} {{.HostConfig.NanoCpus}}' "$NAME" 2>/dev/null) || limits="0 0"
+    emit_check limits info "Memory and CPU" "$(( ${limits% *} / 1048576 )) MB, $(( ${limits#* } / 1000000000 )) CPUs"
+    local port
+    port=$(docker port "$NAME" 1433/tcp 2>/dev/null | head -1) || true
+    [ -n "$port" ] && PORT=${port##*:}
+  fi
+
+  if command -v dotnet >/dev/null; then emit_check dotnet ok ".NET SDK" "$(dotnet --version 2>/dev/null)"
+  else emit_check dotnet bad ".NET SDK" "missing"; minor+=(".NET isn't installed."); fi
+  if [ -n "$(ls -d "$HOME"/.dotnet/tools/dotnet-ef 2>/dev/null)" ]; then emit_check ef ok "dotnet-ef" "installed"
+  else emit_check ef bad "dotnet-ef" "missing"; minor+=("dotnet-ef isn't installed."); fi
+  if vscode_app >/dev/null; then
+    emit_check vscode ok "VS Code" "installed"
+    if ls -d "$HOME"/.vscode/extensions/ms-mssql.mssql-* >/dev/null 2>&1; then emit_check mssql ok "SQL Server extension" "installed"
+    else emit_check mssql bad "SQL Server extension" "missing"; minor+=("The SQL editor isn't set up."); fi
+    if grep -qs "sqlserver-mac-$NAME" "$VSCODE_SETTINGS"; then emit_check connection ok "Saved connection" "Local SQL Server"
+    else emit_check connection bad "Saved connection" "missing"; minor+=("The SQL editor isn't connected."); fi
+  else
+    emit_check vscode bad "VS Code" "missing"; minor+=("The SQL editor isn't installed.")
+  fi
+  if [ -x "$CONFIG_DIR/bin/sqlserver" ]; then emit_check helper ok "sqlserver command" "installed"
+  else emit_check helper bad "sqlserver command" "missing"; minor+=("The sqlserver command is missing."); fi
+
+  if [ ! -f "$PW_FILE" ] && { [ "$container" = missing ] || [ "$container" = unknown ]; }; then state=notinstalled
+  elif ((${#issues[@]})); then state=broken
+  elif [ "$container" = ready ]; then state=on
+  elif [ "$container" = running ]; then state=starting
+  else state=off
+  fi
+  echo "state|$state"
+  if ((${#issues[@]})); then echo "reason|${issues[0]}"; fi
+  if ((${#minor[@]})); then echo "minor|${minor[0]}"; fi
+  echo "port|$PORT"
+}
+
+# Turns the database on: starts Docker if needed, then the container, then
+# waits until SQL Server accepts logins.
+server_start() {
+  PASSWORD=$(cat "$PW_FILE" 2>/dev/null) || die "The database isn't set up yet."
+  if ! docker_up; then
+    say "Starting Docker"
+    if [ -d "$DOCKER_APP" ]; then open -ga Docker
+    elif command -v colima >/dev/null; then colima start >/dev/null 2>&1 || true
+    else die "Docker isn't installed."; fi
+    wait_for 180 docker_up || die "Docker didn't start."
+  fi
+  say "Starting SQL Server"
+  docker start "$NAME" >/dev/null 2>&1 || die "The database is missing. Use Fix it to set it up again."
+  for ((i = 0; i < 90; i++)); do
+    if sql 'SELECT 1' >/dev/null 2>&1; then say "Ready"; return 0; fi
+    [ "$(docker inspect -f '{{.State.Running}}' "$NAME" 2>/dev/null)" = true ] || die "SQL Server stopped while starting."
+    sleep 2
+  done
+  die "SQL Server is taking too long to start."
+}
+
+# Turns the database off. Also stops Docker Desktop when nothing else is
+# running in it, so its VM gives the RAM back.
+server_stop() {
+  docker_up || return 0
+  docker stop "$NAME" >/dev/null 2>&1 || true
+  if [ -z "${SQLSETUP_KEEP_DOCKER:-}" ] && [ -z "$(docker ps -q)" ] && docker desktop version >/dev/null 2>&1; then
+    docker desktop stop >/dev/null 2>&1 || true
+  fi
+  say "Stopped"
+}
+
+# Sourcing (tests) loads the functions without running anything.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  case "${1:-setup}" in
+    status) status_report ;;
+    start)  server_start ;;
+    stop)   server_stop ;;
+    setup)  main ;;
+    *) echo "usage: setup.sh [setup|status|start|stop]" >&2; exit 2 ;;
+  esac
+fi

@@ -1,37 +1,28 @@
 #!/bin/bash
 # Builds dist/SQLServerSetup.dmg holding "SQL Server Setup.app", signed with
 # the Syntax Labs Developer ID and notarized through the Apple account signed
-# in to Xcode (no passwords needed). The app runs setup.sh in Terminal.
+# in to Xcode (no passwords needed).
 #
-#   ./build-dmg.sh               # sign + notarize
-#   NOTARIZE=0 ./build-dmg.sh    # sign only, for quick local tests
-#   ICON=stack ./build-dmg.sh    # install (default) | stack | ember
+#   apps/desktop/make-dmg.sh               # sign + notarize
+#   NOTARIZE=0 apps/desktop/make-dmg.sh    # sign only, for quick local tests
+#   ICON=stack apps/desktop/make-dmg.sh    # install (default) | stack | ember
 set -euo pipefail
 cd "$(dirname "$0")"
 
+ROOT=../..
 TEAM=MGH5K382YN
 APP_NAME="SQL Server Setup"
 BUILD=build
 ARCHIVE="$BUILD/App.xcarchive"
-DMG=dist/SQLServerSetup.dmg
+DMG="$ROOT/dist/SQLServerSetup.dmg"
 
 rm -rf "$BUILD" "$DMG"
-mkdir -p "$BUILD/stage" dist
+mkdir -p "$BUILD/stage" "$ROOT/dist"
 
-# Icon: drawn by assets/icon.swift, scaled into an .icns.
-swift assets/icon.swift "${ICON:-install}" "$BUILD/icon.png" 2>/dev/null
-iconset="$BUILD/AppIcon.iconset"
-mkdir -p "$iconset"
-for s in 16 32 128 256 512; do
-  sips -z $s $s "$BUILD/icon.png" --out "$iconset/icon_${s}x${s}.png" >/dev/null
-  sips -z $((s * 2)) $((s * 2)) "$BUILD/icon.png" --out "$iconset/icon_${s}x${s}@2x.png" >/dev/null
-done
-iconutil -c icns "$iconset" -o "$BUILD/AppIcon.icns"
-
-# Generated next to the spec so its relative paths resolve; removed at the end.
-xcodegen generate --quiet --spec app/project.yml --project app
+"$ROOT/assets/make-icon.sh" "${ICON:-install}" "$BUILD/AppIcon.icns"
+xcodegen generate --quiet --spec project.yml
 echo "Archiving..."
-xcodebuild -quiet -project app/SQLServerSetup.xcodeproj -destination "generic/platform=macOS" -scheme SQLServerSetup \
+xcodebuild -quiet -project SQLServerSetup.xcodeproj -scheme SQLServerSetup -destination "generic/platform=macOS" \
   -configuration Release -archivePath "$ARCHIVE" archive
 
 if [ "${NOTARIZE:-1}" = 1 ]; then
@@ -67,6 +58,8 @@ else
   cp -R "$ARCHIVE/Products/Applications/$APP_NAME.app" "$BUILD/stage/"
 fi
 codesign --verify --strict --deep "$BUILD/stage/$APP_NAME.app"
+# The usual drag-to-install shortcut. The app also offers to move itself there.
+ln -s /Applications "$BUILD/stage/Applications"
 
 # Writable image first so the mounted volume can carry the icon too. The DMG
 # itself stays unsigned: Gatekeeper then checks the notarized app inside,
@@ -80,5 +73,5 @@ hdiutil detach -quiet "$mnt"
 hdiutil convert -quiet "$rw" -format UDZO -o "$DMG"
 
 spctl -a -t exec -vv "$BUILD/stage/$APP_NAME.app" 2>&1 || true
-rm -rf "$BUILD" app/SQLServerSetup.xcodeproj
+rm -rf "$BUILD" SQLServerSetup.xcodeproj
 echo "Built $DMG"

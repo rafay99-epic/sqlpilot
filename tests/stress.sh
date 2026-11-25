@@ -8,7 +8,7 @@
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-SETUP="$ROOT/setup.sh"
+SETUP="$ROOT/scripts/setup.sh"
 NAME=sqlstress
 PORT=14339
 SECS=${STRESS_SECONDS:-90}
@@ -125,6 +125,19 @@ rc=$?; check "memory below SQL Server's floor is rejected" eval "[ $rc != 0 ] &&
 
 check "server only reachable from this Mac (127.0.0.1)" eval '[ "$(docker port "$NAME" 1433/tcp)" = "127.0.0.1:$PORT" ]'
 
+echo "App commands: status / start / stop"
+app() { env HOME="$SANDBOX/home" MSSQL_CONTAINER="$NAME" MSSQL_PORT="$PORT" SQLSETUP_UI=1 SQLSETUP_KEEP_DOCKER=1 /bin/bash "$SETUP" "$@" </dev/null 2>&1; }
+state_of() { app status | sed -n 's/^state|//p'; }
+check "status says on when the database is running" [ "$(state_of)" = on ]
+check "status lists every part" eval '[ "$(app status | grep -c "^check|")" -ge 9 ]'
+app stop >"$LOGS/app-stop"
+check "stop turns it off" eval '[ "$(state_of)" = off ] && [ "$(docker inspect -f "{{.State.Running}}" "$NAME")" = false ]'
+t0=$(now); app start >"$LOGS/app-start"; rc=$?; dt=$(echo "$(now) - $t0" | bc)
+check "start turns it back on (${dt}s)" eval "[ $rc = 0 ] && [ \"\$(state_of)\" = on ]"
+setup ui-run MSSQL_MEMORY_MB=2560 MSSQL_CPUS=2 SQLSETUP_UI=1
+check "app-mode setup reports step 6 of 6 and never prints the password" eval "grep -q '^progress|6|6|' '$LOGS/ui-run' && ! grep -q 'Dev-' '$LOGS/ui-run'"
+check "status says not installed on a fresh Mac" eval '[ "$(env HOME="$(mktemp -d)" MSSQL_CONTAINER=sqlstress-none SQLSETUP_UI=1 /bin/bash "$SETUP" status | sed -n "s/^state|//p")" = notinstalled ]'
+
 echo "Helper: sqlserver run / restore"
 helper() { HOME="$SANDBOX/home" "$SANDBOX/home/.sqlserver-mac/bin/sqlserver" "$@"; }
 printf 'CREATE DATABASE ClassDb;\nGO\nUSE ClassDb;\nCREATE TABLE Students (Id int PRIMARY KEY, Name nvarchar(50));\nINSERT Students VALUES (1, N%sAda%s), (2, N%sGrace%s);\nGO\n' "'" "'" "'" "'" >"$SANDBOX/class.sql"
@@ -205,6 +218,12 @@ check "container RAM stayed under its 2560 MB cap" [ "$peak_mb" -le 2560 ]
 check "not OOM-killed, no restarts" [ "$(docker inspect -f '{{.State.OOMKilled}} {{.RestartCount}} {{.State.Running}}' "$NAME")" = "false 0 true" ]
 check "stayed responsive under load (slowest SELECT 1 under 5s)" [ "$(echo "$max_lat < 5" | bc)" = 1 ]
 check "still accepting queries after load" [ "$(sql 'SELECT 1' | head -1)" = 1 ]
+
+echo "Repair"
+docker rm -f "$NAME" >/dev/null
+check "status says broken when the database was deleted" eval '[ "$(state_of)" = broken ] && [ "$(app status | sed -n "s/^reason|//p")" = "The database was removed." ]'
+setup repair MSSQL_MEMORY_MB=2560 MSSQL_CPUS=2 SQLSETUP_UI=1
+check "Fix it (setup) brings it back" eval '[ "$(state_of)" = on ]'
 
 if ((fails)); then
   kept=$(mktemp -d /tmp/sqlstress-logs.XXXX)
