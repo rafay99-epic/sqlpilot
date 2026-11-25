@@ -1,0 +1,34 @@
+# XcodeGen spec for the launcher app. build-dmg.sh generates the project from
+# this, archives it, and has Xcode notarize it with the signed-in account.
+name: SQLServerSetup
+options:
+  deploymentTarget:
+    macOS: "12.0"
+targets:
+  SQLServerSetup:
+    type: application
+    platform: macOS
+    sources:
+      - path: main.swift
+      - path: ../setup.sh
+        buildPhase: resources
+      - path: ../build/AppIcon.icns
+        buildPhase: resources
+    info:
+      path: ../build/Info.plist
+      properties:
+        CFBundleDisplayName: SQL Server Setup
+        CFBundleIconFile: AppIcon
+        LSUIElement: true
+        NSHumanReadableCopyright: Syntax Labs
+    settings:
+      PRODUCT_NAME: SQL Server Setup
+      PRODUCT_BUNDLE_IDENTIFIER: com.syntaxlabs.sqlserversetup
+      MARKETING_VERSION: "1.2"
+      CURRENT_PROJECT_VERSION: "3"
+      SWIFT_VERSION: "5.0"
+      DEVELOPMENT_TEAM: MGH5K382YN
+      CODE_SIGN_STYLE: Manual
+      CODE_SIGN_IDENTITY: Developer ID Application
+      ENABLE_HARDENED_RUNTIME: YES
+      OTHER_CODE_SIGN_FLAGS: --timestamp
