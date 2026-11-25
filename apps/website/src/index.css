@@ -1,0 +1,35 @@
+@import "@fontsource-variable/geist";
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --color-surface: #181818;
+  --color-surface-2: #1f1f1f;
+  --color-line: #272727;
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Named text styles from the design system: size from the Tailwind scale,
+   one weight each. Use these instead of loose size + weight utilities. */
+@utility heading-1 { @apply text-6xl font-semibold; text-wrap: balance; }
+@utility heading-3 { @apply text-4xl font-semibold; text-wrap: balance; }
+@utility heading-5 { @apply text-2xl font-semibold; text-wrap: balance; }
+@utility title-2 { @apply text-lg font-medium; }
+@utility title-3 { @apply text-base font-medium; }
+@utility body-3 { @apply text-base font-normal; text-wrap: pretty; }
+@utility body-6 { @apply text-sm font-normal; text-wrap: pretty; }
+@utility button-md { @apply text-base font-semibold; }
+@utility button-sm { @apply text-sm font-semibold; }
+@utility caption-2 { @apply text-sm font-normal; }
+@utility caption-5 { @apply text-xs font-normal; }
+
+html {
+  background: #000;
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}

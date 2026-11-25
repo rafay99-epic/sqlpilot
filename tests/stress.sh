@@ -8,7 +8,7 @@
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-SETUP="$ROOT/setup.sh"
+SETUP="$ROOT/scripts/setup.sh"
 NAME=sqlstress
 PORT=14339
 SECS=${STRESS_SECONDS:-90}
@@ -50,37 +50,7 @@ sql() {
     "$SQLCMD" -C -S localhost -U sa -b -h -1 -W -Q "SET NOCOUNT ON; $1"
 }
 
-echo "Sizing plan per Mac (RAM GB, CPUs -> container MB, CPUs, Docker VM MB)"
-plan() { (source "$SETUP" && plan_resources "$1" "$2"); }
-for spec in "8 8" "16 10" "18 12" "24 8" "36 14" "64 16" "128 24"; do
-  printf '    %-7s -> %s\n' "$spec" "$(plan $spec)"
-done
-check "8 GB Mac stays at the 2.5 GB SQL Server floor" [ "$(plan 8 8)" = "2560 2 3584" ]
-check "16 GB / 10 CPU gets 4 GB, 5 CPUs" [ "$(plan 16 10)" = "4096 5 5120" ]
-check "CPUs capped at 6" [ "$(plan 128 24)" = "8192 6 9216" ]
-
-echo "Fresh Mac: what gets installed (downloads and password prompt stubbed)"
-fresh_plan() {
-  (
-    source "$SETUP"
-    DOCKER_APP=/nonexistent NEW_DOCKER=0
-    docker_up() { return 1; }
-    vscode_app() { return 1; }
-    command() { if [ "$1" = -v ] && { [ "$2" = colima ] || [ "$2" = dotnet ]; }; then return 1; fi; builtin command "$@"; }
-    download() { echo "download: $3"; : >"$2"; }
-    hdiutil() { if [ "$1" = attach ]; then printf '/dev/disk9s1\tApple_HFS\t/Volumes/Docker\n'; fi; }
-    run_as_admin() { echo "admin: $1"; }
-    ditto() { :; }
-    install_missing arm64
-    echo "NEW_DOCKER=$NEW_DOCKER"
-  ) 2>&1
-}
-plan_out=$(fresh_plan)
-echo "$plan_out" | sed 's/^/    /'
-check "downloads Docker Desktop, .NET SDK and VS Code" eval '[ "$(echo "$plan_out" | grep -c "^download:")" = 3 ]'
-check "one password prompt for every root step" eval '[ "$(echo "$plan_out" | grep -c "^admin:")" = 1 ]'
-check "Docker installed with its license pre-accepted" eval 'echo "$plan_out" | grep -q "/Volumes/Docker/Docker.app/Contents/MacOS/install --accept-license --user=$USER && installer -pkg"'
-check "fresh Docker gets VM sizing before first launch" eval 'echo "$plan_out" | grep -q "NEW_DOCKER=1"'
+"$ROOT/tests/unit.sh" || fails=$((fails + 1))
 
 echo "Install scenarios"
 t0=$(now)
@@ -125,6 +95,18 @@ rc=$?; check "memory below SQL Server's floor is rejected" eval "[ $rc != 0 ] &&
 
 check "server only reachable from this Mac (127.0.0.1)" eval '[ "$(docker port "$NAME" 1433/tcp)" = "127.0.0.1:$PORT" ]'
 
+echo "App commands: status / start / stop"
+app() { env HOME="$SANDBOX/home" MSSQL_CONTAINER="$NAME" MSSQL_PORT="$PORT" SQLSETUP_UI=1 /bin/bash "$SETUP" "$@" </dev/null 2>&1; }
+state_of() { app status | sed -n 's/^state|//p'; }
+check "status says on when the database is running" [ "$(state_of)" = on ]
+check "status lists every part" eval '[ "$(app status | grep -c "^check|")" -ge 9 ]'
+app stop >"$LOGS/app-stop"
+check "stop turns it off" eval '[ "$(state_of)" = off ] && [ "$(docker inspect -f "{{.State.Running}}" "$NAME")" = false ]'
+t0=$(now); app start >"$LOGS/app-start"; rc=$?; dt=$(echo "$(now) - $t0" | bc)
+check "start turns it back on (${dt}s)" eval "[ $rc = 0 ] && [ \"\$(state_of)\" = on ]"
+setup ui-run MSSQL_MEMORY_MB=2560 MSSQL_CPUS=2 SQLSETUP_UI=1
+check "app-mode setup reports step 6 of 6 and never prints the password" eval "grep -q '^progress|6|6|' '$LOGS/ui-run' && ! grep -q 'Dev-' '$LOGS/ui-run'"
+
 echo "Helper: sqlserver run / restore"
 helper() { HOME="$SANDBOX/home" "$SANDBOX/home/.sqlserver-mac/bin/sqlserver" "$@"; }
 printf 'CREATE DATABASE ClassDb;\nGO\nUSE ClassDb;\nCREATE TABLE Students (Id int PRIMARY KEY, Name nvarchar(50));\nINSERT Students VALUES (1, N%sAda%s), (2, N%sGrace%s);\nGO\n' "'" "'" "'" "'" >"$SANDBOX/class.sql"
@@ -136,24 +118,6 @@ helper restore "$SANDBOX/ClassDb.bak" "Restored O'Brien" >"$LOGS/helper-restore"
 check "sqlserver restore loads a .bak under a new name (quotes too)" eval "[ \"\$(sql \"SELECT COUNT(*) FROM [Restored O'Brien].dbo.Students\" | head -1)\" = 2 ]"
 helper restore "$SANDBOX/ClassDb.bak" >"$LOGS/helper-restore2" 2>&1
 check "sqlserver restore over an existing database replaces it" [ $? = 0 ]
-
-echo "VS Code connection"
-vs="$SANDBOX/vscode-settings.json"
-cat >"$vs" <<'JSONC'
-{
-  // my editor setup
-  "editor.fontSize": 14,
-  "mssql.connections": [
-    { "profileName": "Work", "server": "db.example.com", "user": "me", },
-  ],
-}
-JSONC
-vsc() { (source "$SETUP"; VSCODE_SETTINGS="$vs"; PORT=1433; NAME=sqlserver; PASSWORD=Test-pw1; add_vscode_connection); }
-r1=$(vsc); r2=$(vsc)
-names=$(osascript -l JavaScript -e "JSON.parse(\$.NSString.stringWithContentsOfFileEncodingError('$vs', 4, null).js)['mssql.connections'].map(c => c.profileName).join(',')")
-check "adds Local SQL Server to a JSONC settings file, keeps other settings" eval "[ '$r1' = updated ] && grep -q '\"editor.fontSize\": 14' '$vs' && [ '$names' = 'Work,Local SQL Server' ]"
-check "second run leaves settings untouched" [ "$r2" = unchanged ]
-check "original settings backed up" grep -q 'my editor setup' "$vs.bak-sqlserver-setup"
 
 echo "Load: 8 sessions for ${SECS}s on 2560 MB / 2 CPUs"
 sql "CREATE DATABASE StressDb; ALTER DATABASE StressDb SET RECOVERY SIMPLE; ALTER DATABASE StressDb SET READ_COMMITTED_SNAPSHOT ON;" >/dev/null
@@ -205,6 +169,12 @@ check "container RAM stayed under its 2560 MB cap" [ "$peak_mb" -le 2560 ]
 check "not OOM-killed, no restarts" [ "$(docker inspect -f '{{.State.OOMKilled}} {{.RestartCount}} {{.State.Running}}' "$NAME")" = "false 0 true" ]
 check "stayed responsive under load (slowest SELECT 1 under 5s)" [ "$(echo "$max_lat < 5" | bc)" = 1 ]
 check "still accepting queries after load" [ "$(sql 'SELECT 1' | head -1)" = 1 ]
+
+echo "Repair"
+docker rm -f "$NAME" >/dev/null
+check "status says broken when the database was deleted" eval '[ "$(state_of)" = broken ] && [ "$(app status | sed -n "s/^reason|//p")" = "The database was removed." ]'
+setup repair MSSQL_MEMORY_MB=2560 MSSQL_CPUS=2 SQLSETUP_UI=1
+check "Fix it (setup) brings it back" eval '[ "$(state_of)" = on ]'
 
 if ((fails)); then
   kept=$(mktemp -d /tmp/sqlstress-logs.XXXX)

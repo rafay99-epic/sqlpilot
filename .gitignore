@@ -1,3 +1,7 @@
 build/
-app/*.xcodeproj/
+dist/
+node_modules/
+*.xcodeproj/
 .DS_Store
+*.tsbuildinfo
+.vercel

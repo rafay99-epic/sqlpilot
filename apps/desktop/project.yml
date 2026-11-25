@@ -1,0 +1,50 @@
+# XcodeGen spec for SQLPilot. make-dmg.sh generates the project from this,
+# archives it, and has Xcode notarize it with the signed-in account.
+name: SQLPilot
+options:
+  deploymentTarget:
+    macOS: "14.0"
+targets:
+  SQLPilot:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/SQLPilot
+      # The whole folder (setup.sh, lib/, sqlserver) lands in Resources/scripts.
+      - path: ../../scripts
+        type: folder
+        buildPhase: resources
+      - path: build/AppIcon.icns
+        buildPhase: resources
+    info:
+      path: build/Info.plist
+      properties:
+        CFBundleDisplayName: SQLPilot
+        CFBundleIconFile: AppIcon
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSHumanReadableCopyright: © 2026 Syntax Lab Technology
+    settings:
+      PRODUCT_NAME: SQLPilot
+      PRODUCT_BUNDLE_IDENTIFIER: com.syntaxlabtechnology.sqlpilot
+      # Real values come from dev.sh / make-dmg.sh: 0.<commit count>, like Vitals.
+      MARKETING_VERSION: "0.0"
+      CURRENT_PROJECT_VERSION: "0.0"
+      SWIFT_VERSION: "5.0"
+      DEVELOPMENT_TEAM: MGH5K382YN
+      CODE_SIGN_STYLE: Manual
+      CODE_SIGN_IDENTITY: Developer ID Application
+      ENABLE_HARDENED_RUNTIME: YES
+      OTHER_CODE_SIGN_FLAGS: --timestamp
+    scheme:
+      testTargets: [SQLPilotTests]
+  SQLPilotTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/SQLPilotTests
+    dependencies:
+      - target: SQLPilot
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
