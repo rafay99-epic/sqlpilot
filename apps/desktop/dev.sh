@@ -10,11 +10,11 @@ xcodegen generate --quiet --spec project.yml
 sign=(CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= OTHER_CODE_SIGN_FLAGS=)
 
 if [ "${1:-run}" = test ]; then
-  xcodebuild -quiet -project SQLServerSetup.xcodeproj -scheme SQLServerSetup -destination 'platform=macOS' \
+  xcodebuild -quiet -project SQLPilot.xcodeproj -scheme SQLPilot -destination 'platform=macOS' \
     -derivedDataPath build/dd "${sign[@]}" test
   echo "Tests passed."
 else
-  xcodebuild -quiet -project SQLServerSetup.xcodeproj -scheme SQLServerSetup -destination 'platform=macOS' \
+  xcodebuild -quiet -project SQLPilot.xcodeproj -scheme SQLPilot -destination 'platform=macOS' \
     -configuration Debug -derivedDataPath build/dd "${sign[@]}" build
-  open "build/dd/Build/Products/Debug/SQL Server Setup.app"
+  open "build/dd/Build/Products/Debug/SQLPilot.app"
 fi

@@ -30,6 +30,4 @@ struct StatusReport: Equatable {
       }
     }
   }
-
-  var problems: [HealthCheck] { checks.filter { $0.status == .bad } }
 }

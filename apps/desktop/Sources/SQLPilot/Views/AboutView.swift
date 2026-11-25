@@ -15,7 +15,7 @@ struct AboutView: View {
     VStack(spacing: 14) {
       AppIcon(size: 88)
       VStack(spacing: 3) {
-        Text("SQL Server Setup").font(.title2.weight(.semibold))
+        Text("SQLPilot").font(.title2.weight(.semibold))
         Text(version).font(.callout).foregroundStyle(.secondary).monospacedDigit()
         Text("A local SQL Server for class, on any Mac.").font(.caption).foregroundStyle(.secondary)
       }

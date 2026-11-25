@@ -21,8 +21,8 @@ enum ServerPhase: Equatable {
 /// Where a first-time setup or repair is up to.
 struct SetupProgress: Equatable {
   var step = 0
-  var total = SetupProgress.steps.count
   var detail = ""
+  var total: Int { Self.steps.count }
 
   /// Step titles in student words, in the order setup.sh runs them.
   static let steps = [

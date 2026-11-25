@@ -9,7 +9,7 @@ struct AppCommands: Commands {
 
   var body: some Commands {
     CommandGroup(replacing: .appInfo) {
-      Button("About SQL Server Setup") { openWindow(id: "about") }
+      Button("About SQLPilot") { openWindow(id: "about") }
     }
     CommandGroup(replacing: .newItem) {}
 

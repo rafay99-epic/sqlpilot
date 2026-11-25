@@ -17,8 +17,9 @@ struct ScriptLine: Equatable {
   var text: String { fields.joined(separator: "|") }
 }
 
-/// Runs the bundled scripts/setup.sh in app mode (SQLSETUP_UI=1), which
-/// prints `kind|...` lines instead of Terminal output.
+/// Runs the bundled scripts/setup.sh (copied to Resources/scripts with its
+/// lib/) in app mode (SQLSETUP_UI=1), which prints `kind|...` lines instead
+/// of Terminal output.
 struct SetupScript: Sendable {
   enum Command: String {
     case status, start, stop, setup
@@ -26,7 +27,7 @@ struct SetupScript: Sendable {
 
   let url: URL
 
-  static let bundled = SetupScript(url: Bundle.main.url(forResource: "setup", withExtension: "sh")!)
+  static let bundled = SetupScript(url: Bundle.main.url(forResource: "setup", withExtension: "sh", subdirectory: "scripts")!)
 
   /// Runs `command`, handing every output line to `onLine` as it arrives.
   /// Returns the exit status (-1 if the script couldn't start).

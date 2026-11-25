@@ -11,37 +11,53 @@ final class ServerModel {
   private(set) var checkedAt: Date?
 
   private var log: [String] = []
-  private let script: SetupScript
+  private var refreshing = false
+  private let script = SetupScript.bundled
   private let passwordFile = FileManager.default.homeDirectoryForCurrentUser
     .appendingPathComponent(".sqlserver-mac/sa_password")
-
-  init(script: SetupScript = .bundled) {
-    self.script = script
-  }
 
   var isOn: Bool { phase == .on }
   var canToggle: Bool { phase == .on || phase == .off }
 
   // MARK: Checking
 
-  /// Re-reads `setup.sh status`. With `keepPhase`, only the health list
-  /// updates, so a failure message stays on screen.
+  /// For automatic triggers (window opens, app comes to the front): skips
+  /// when an action is running or a check is already in flight.
+  func refreshIfIdle() async {
+    guard !refreshing, !phase.isBusy || phase == .checking else { return }
+    await refresh()
+  }
+
+  /// Re-reads `setup.sh status`. While SQL Server is still starting it checks
+  /// again every 3 s, for up to 2 minutes. With `keepPhase`, only the health
+  /// list updates, so a failure message stays on screen.
   func refresh(keepPhase: Bool = false) async {
+    refreshing = true
+    defer { refreshing = false }
+    for _ in 0..<40 {
+      await readStatus()
+      if keepPhase { return }
+      guard report.state == .starting else { return applyState() }
+      phase = .starting
+      try? await Task.sleep(for: .seconds(3))
+    }
+    phase = .broken("SQL Server is taking too long to start.")
+  }
+
+  private func readStatus() async {
     var lines: [String] = []
     _ = await run(.status) { lines.append($0) }
     report = StatusReport(lines: lines)
     checkedAt = .now
-    guard !keepPhase else { return }
+  }
+
+  private func applyState() {
     switch report.state {
     case .notInstalled: phase = .notInstalled
     case .broken: phase = .broken(report.reason ?? "Something isn't set up.")
     case .on: phase = .on
     case .off: phase = .off
-    case .starting:
-      // Container is up but SQL Server isn't accepting logins yet.
-      phase = .starting
-      try? await Task.sleep(for: .seconds(3))
-      await refresh()
+    case .starting: phase = .starting
     case nil: phase = .broken("Couldn't check the database.")
     }
   }
@@ -58,7 +74,7 @@ final class ServerModel {
     let status = await run(.setup) { raw in
       guard let line = ScriptLine(raw) else { return }
       switch line.kind {
-      case "progress": progress = SetupProgress(step: Int(line.fields[0]) ?? progress.step, detail: "")
+      case "progress": progress = SetupProgress(step: Int(line.fields[0]) ?? progress.step)
       case "detail": progress.detail = line.text
       case "error": failure = line.text
       default: return
@@ -105,13 +121,16 @@ final class ServerModel {
   }
 
   func copyConnectionString() {
-    let password = (try? String(contentsOf: passwordFile, encoding: .utf8)) ?? ""
     Clipboard.copy("Server=localhost,\(report.port);Database=YourDb;User Id=sa;Password=\(password);TrustServerCertificate=True;")
   }
 
   func copyProblemReport() {
     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-    Clipboard.copy(ProblemReport.make(version: version, phase: phase, checks: report.checks, log: log))
+    Clipboard.copy(ProblemReport.make(version: version, phase: phase, checks: report.checks, log: log, secret: password))
+  }
+
+  private var password: String {
+    (try? String(contentsOf: passwordFile, encoding: .utf8)) ?? ""
   }
 
   // MARK: Script

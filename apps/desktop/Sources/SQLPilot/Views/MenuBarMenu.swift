@@ -22,7 +22,7 @@ struct MenuBarMenu: View {
       openWindow(id: "main")
       NSApp.activate(ignoringOtherApps: true)
     }
-    Button("Quit SQL Server Setup") { NSApp.terminate(nil) }
+    Button("Quit SQLPilot") { NSApp.terminate(nil) }
       .keyboardShortcut("q")
   }
 }

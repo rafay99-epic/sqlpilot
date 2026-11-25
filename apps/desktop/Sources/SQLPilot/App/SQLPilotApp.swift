@@ -2,27 +2,27 @@ import AppKit
 import SwiftUI
 
 @main
-struct SQLServerSetupApp: App {
+struct SQLPilotApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
   // SwiftUI creates the App once, so the model lives for the process.
   @State private var model = ServerModel()
 
   var body: some Scene {
     // Window, not WindowGroup: one main window, no ⌘N duplicates.
-    Window("SQL Server Setup", id: "main") {
+    Window("SQLPilot", id: "main") {
       ContentView()
         .environment(model)
-        .task { await model.refresh() }
+        .task { await model.refreshIfIdle() }
         // Re-check whenever the student comes back to the app.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-          if !model.phase.isBusy { Task { await model.refresh() } }
+          Task { await model.refreshIfIdle() }
         }
     }
     .windowStyle(.hiddenTitleBar)
     .windowResizability(.contentSize)
     .commands { AppCommands(model: model) }
 
-    Window("About SQL Server Setup", id: "about") {
+    Window("About SQLPilot", id: "about") {
       AboutView()
     }
     .windowStyle(.hiddenTitleBar)

@@ -1,33 +1,35 @@
-# XcodeGen spec for the desktop app. make-dmg.sh generates the project from
-# this, archives it, and has Xcode notarize it with the signed-in account.
-name: SQLServerSetup
+# XcodeGen spec for SQLPilot. make-dmg.sh generates the project from this,
+# archives it, and has Xcode notarize it with the signed-in account.
+name: SQLPilot
 options:
   deploymentTarget:
     macOS: "14.0"
 targets:
-  SQLServerSetup:
+  SQLPilot:
     type: application
     platform: macOS
     sources:
-      - path: Sources/SQLServerSetup
-      - path: ../../scripts/setup.sh
+      - path: Sources/SQLPilot
+      # The whole folder (setup.sh, lib/, sqlserver) lands in Resources/scripts.
+      - path: ../../scripts
+        type: folder
         buildPhase: resources
       - path: build/AppIcon.icns
         buildPhase: resources
     info:
       path: build/Info.plist
       properties:
-        CFBundleDisplayName: SQL Server Setup
+        CFBundleDisplayName: SQLPilot
         CFBundleIconFile: AppIcon
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.developer-tools
         NSHumanReadableCopyright: © 2026 Syntax Lab Technology
     settings:
-      PRODUCT_NAME: SQL Server Setup
-      PRODUCT_BUNDLE_IDENTIFIER: com.syntaxlabtechnology.sqlserversetup
+      PRODUCT_NAME: SQLPilot
+      PRODUCT_BUNDLE_IDENTIFIER: com.syntaxlabtechnology.sqlpilot
       MARKETING_VERSION: "2.0"
-      CURRENT_PROJECT_VERSION: "5"
+      CURRENT_PROJECT_VERSION: "6"
       SWIFT_VERSION: "5.0"
       DEVELOPMENT_TEAM: MGH5K382YN
       CODE_SIGN_STYLE: Manual
@@ -35,16 +37,13 @@ targets:
       ENABLE_HARDENED_RUNTIME: YES
       OTHER_CODE_SIGN_FLAGS: --timestamp
     scheme:
-      testTargets: [SQLServerSetupTests]
-  SQLServerSetupTests:
+      testTargets: [SQLPilotTests]
+  SQLPilotTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - path: Tests/SQLServerSetupTests
+      - path: Tests/SQLPilotTests
     dependencies:
-      - target: SQLServerSetup
+      - target: SQLPilot
     settings:
-      # The product name has spaces, so point the test host at it explicitly.
-      TEST_HOST: "$(BUILT_PRODUCTS_DIR)/SQL Server Setup.app/Contents/MacOS/SQL Server Setup"
-      BUNDLE_LOADER: "$(TEST_HOST)"
       GENERATE_INFOPLIST_FILE: YES

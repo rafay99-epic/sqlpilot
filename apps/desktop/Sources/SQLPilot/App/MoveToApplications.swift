@@ -21,9 +21,17 @@ enum MoveToApplications {
     let folder = fm.isWritableFile(atPath: "/Applications") ? "/Applications" : home + "/Applications"
     let target = URL(fileURLWithPath: folder).appendingPathComponent(bundle.lastPathComponent)
     do {
+      // Copy beside the target first, so a failed copy never deletes the old app.
+      let staged = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      try fm.createDirectory(at: staged, withIntermediateDirectories: true)
+      let copy = staged.appendingPathComponent(bundle.lastPathComponent)
+      try fm.copyItem(at: bundle, to: copy)
       try fm.createDirectory(atPath: folder, withIntermediateDirectories: true)
-      if fm.fileExists(atPath: target.path) { try fm.removeItem(at: target) }
-      try fm.copyItem(at: bundle, to: target)
+      if fm.fileExists(atPath: target.path) {
+        _ = try fm.replaceItemAt(target, withItemAt: copy)
+      } else {
+        try fm.moveItem(at: copy, to: target)
+      }
     } catch {
       NSAlert(error: error).runModal()
       return

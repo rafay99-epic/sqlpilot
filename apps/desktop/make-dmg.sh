@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds dist/SQLServerSetup.dmg holding "SQL Server Setup.app", signed with
+# Builds dist/SQLPilot.dmg holding SQLPilot.app, signed with
 # the Syntax Labs Developer ID and notarized through the Apple account signed
 # in to Xcode (no passwords needed).
 #
@@ -11,10 +11,10 @@ cd "$(dirname "$0")"
 
 ROOT=../..
 TEAM=MGH5K382YN
-APP_NAME="SQL Server Setup"
+APP_NAME="SQLPilot"
 BUILD=build
 ARCHIVE="$BUILD/App.xcarchive"
-DMG="$ROOT/dist/SQLServerSetup.dmg"
+DMG="$ROOT/dist/SQLPilot.dmg"
 
 rm -rf "$BUILD" "$DMG"
 mkdir -p "$BUILD/stage" "$ROOT/dist"
@@ -22,7 +22,7 @@ mkdir -p "$BUILD/stage" "$ROOT/dist"
 "$ROOT/assets/make-icon.sh" "${ICON:-install}" "$BUILD/AppIcon.icns"
 xcodegen generate --quiet --spec project.yml
 echo "Archiving..."
-xcodebuild -quiet -project SQLServerSetup.xcodeproj -scheme SQLServerSetup -destination "generic/platform=macOS" \
+xcodebuild -quiet -project SQLPilot.xcodeproj -scheme SQLPilot -destination "generic/platform=macOS" \
   -configuration Release -archivePath "$ARCHIVE" archive
 
 if [ "${NOTARIZE:-1}" = 1 ]; then
@@ -73,5 +73,5 @@ hdiutil detach -quiet "$mnt"
 hdiutil convert -quiet "$rw" -format UDZO -o "$DMG"
 
 spctl -a -t exec -vv "$BUILD/stage/$APP_NAME.app" 2>&1 || true
-rm -rf "$BUILD" SQLServerSetup.xcodeproj
+rm -rf "$BUILD" SQLPilot.xcodeproj
 echo "Built $DMG"

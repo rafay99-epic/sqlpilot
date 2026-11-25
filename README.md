@@ -1,10 +1,10 @@
 <img src="assets/icon-install.png" width="96" align="right" alt="">
 
-# SQL Server Setup for Mac
+# SQLPilot
 
-A small Mac app (Apple Silicon or Intel) that gives students a local SQL Server for .NET coursework, plus an SSMS-style editor.
+SQLPilot is a small Mac app (Apple Silicon or Intel) that gives students a local SQL Server for .NET coursework, plus an SSMS-style editor.
 
-Open `dist/SQLServerSetup.dmg` and drag **SQL Server Setup** to Applications (or just open it; it offers to move itself). The app:
+Open `dist/SQLPilot.dmg` and drag **SQLPilot** to Applications (or just open it; it offers to move itself). The app:
 
 - installs whatever is missing (Rosetta, Docker Desktop, .NET SDK, VS Code) behind one password prompt, with no Terminal
 - runs SQL Server 2022 Developer Edition in Docker, sized to the Mac's RAM and CPUs
@@ -18,7 +18,7 @@ Signed with the Syntax Labs Developer ID and notarized, so Gatekeeper opens it w
 
 ```
 apps/desktop/      SwiftUI app (XcodeGen project)
-  Sources/SQLServerSetup/
+  Sources/SQLPilot/
     App/           entry point, menus, move-to-Applications
     Models/        ServerModel (state + actions), phases, health checks
     Services/      runs setup.sh, parses its output, problem report, VS Code link
@@ -26,7 +26,11 @@ apps/desktop/      SwiftUI app (XcodeGen project)
   Tests/           unit tests (status parsing, report masking)
   dev.sh           debug build / unit tests
   make-dmg.sh      signed, notarized DMG into dist/
-scripts/setup.sh   the engine: install, repair, status, start, stop
+scripts/           the engine, bundled into the app
+  setup.sh         entry point: setup (install or repair), status, start, stop
+  lib/             one file per job: ui, plan, system, docker, install, steps,
+                   server, status, vscode, helper
+  sqlserver        the Terminal helper setup installs
 tests/stress.sh    sandboxed tests for setup.sh, including a load test
 assets/            icon drawing code and previews
 ```
