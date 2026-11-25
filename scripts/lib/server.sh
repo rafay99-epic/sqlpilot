@@ -31,6 +31,8 @@ server_start() {
 # it); its Resource Saver hands the VM's RAM back once nothing is running.
 server_stop() {
   docker_up || return 0
-  docker stop "$NAME" >/dev/null 2>&1 || true
+  # SQL Server needs more than Docker's default 10 s to shut down cleanly;
+  # without -t it gets killed (exit 137) mid-checkpoint.
+  docker stop -t 60 "$NAME" >/dev/null 2>&1 || true
   say "Stopped"
 }

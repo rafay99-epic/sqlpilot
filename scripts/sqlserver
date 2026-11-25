@@ -13,7 +13,7 @@ quote() { local q="'"; printf "%s" "${1//$q/$q$q}"; } # escape for a T-SQL N'...
 
 case "${1:-help}" in
   start)    docker start "$NAME" >/dev/null && echo "Started." ;;
-  stop)     docker stop "$NAME" >/dev/null && echo "Stopped. RAM is free again." ;;
+  stop)     docker stop -t 60 "$NAME" >/dev/null && echo "Stopped. RAM is free again." ;;
   status)   docker ps -a --filter "name=^/$NAME$" --format '{{.Names}}: {{.Status}}' ;;
   info)     cat "$DIR/connection.txt" ;;
   password) pw | pbcopy; echo "Password copied to the clipboard." ;;
